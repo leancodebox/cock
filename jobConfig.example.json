@@ -1,0 +1,20 @@
+[
+  {
+    "jobName": "job1",
+    "binPath": "jobPath",
+    "params": [
+      "serve"
+    ],
+    "dir": "/Users/tmp",
+    "run": false
+  },
+  {
+    "jobName": "job2",
+    "binPath": "job2",
+    "params": [
+      "serve"
+    ],
+    "dir": "/Users/tmp",
+    "run": false
+  }
+]
