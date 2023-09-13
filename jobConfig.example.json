@@ -1,20 +1,33 @@
-[
-  {
-    "jobName": "job1",
-    "binPath": "jobPath",
-    "params": [
-      "serve"
-    ],
-    "dir": "/Users/tmp",
-    "run": false
-  },
-  {
-    "jobName": "job2",
-    "binPath": "job2",
-    "params": [
-      "serve"
-    ],
-    "dir": "/Users/tmp",
-    "run": false
-  }
-]
+{
+  "residentTask": [
+    {
+      "jobName": "thh",
+      "binPath": "thh",
+      "params": [
+        "serve"
+      ],
+      "dir": "/Users/thh/workspace/thh",
+      "run": true
+    },
+    {
+      "jobName": "dt",
+      "binPath": "dt",
+      "params": [
+        "serve"
+      ],
+      "dir": "/Users/thh/workspace/atool",
+      "run": true
+    }
+  ],
+  "scheduledTask": [
+    {
+      "jobName": "kuai",
+      "binPath": "kuai",
+      "params": [
+        "now"
+      ],
+      "spec": "* * * * *",
+      "run": true
+    }
+  ]
+}
