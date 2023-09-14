@@ -14,14 +14,28 @@ import (
 const maxExecutionTime = 10 * time.Second // 最大允许的运行时间
 const maxConsecutiveFailures = 3          // 连续失败次数的最大值
 
+type OutputType int
+
+const (
+	OutputTypeStd  OutputType = iota // 输出到标准输入输出
+	OutputTypeFile                   // 输出到文件
+)
+
+type RunOptions struct {
+	OutputType  OutputType `json:"outputType"`  // 输出方式
+	OutputPath  string     `json:"outputPath"`  // 输出路径
+	MaxFailures int        `json:"maxFailures"` // 最大失败次数
+}
+
 type Job struct {
-	JobName string   `json:"jobName"`
-	BinPath string   `json:"binPath"`
-	Params  []string `json:"params"`
-	Dir     string   `json:"dir"`
-	Timer   bool     `json:"timer"`
-	Spec    string   `json:"spec"`
-	Run     bool     `json:"run"`
+	JobName string     `json:"jobName"`
+	BinPath string     `json:"binPath"`
+	Params  []string   `json:"params"`
+	Dir     string     `json:"dir"`
+	Timer   bool       `json:"timer"`
+	Spec    string     `json:"spec"`
+	Run     bool       `json:"run"`
+	Options RunOptions `json:"options"` // 运行选项
 }
 
 type JobConfig struct {
@@ -57,18 +71,38 @@ func main() {
 	for _, job := range jobConfig.ResidentTask {
 		wg.Add(1)
 		go func(job Job) {
+			defer func() {
+				if p := recover(); p != nil {
+					data, _ := json.Marshal(p)
+					cockSay("任务崩溃" + string(data))
+				}
+			}()
 			defer wg.Done()
 			if job.Run == false {
 				return
 			}
+			fmt.Println(job.JobName + "加入常驻任务")
 			consecutiveFailures := 1
+			cmd := exec.Command(job.BinPath, job.Params...)
+			cmd.Dir = job.Dir
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
+				err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
+				if err != nil {
+					fmt.Println(err)
+				}
+				logFile, err := os.OpenFile(job.Options.OutputPath+"/"+job.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+				if err != nil {
+					fmt.Println(err)
+				}
+				defer logFile.Close()
+				cmd.Stdout = logFile
+				cmd.Stderr = logFile
+			}
 			for {
 				startTime := time.Now()
-				cmd := exec.Command(job.BinPath, job.Params...)
-				cmd.Dir = job.Dir
-				cmd.Stdin = os.Stdin
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
 				counter += 1
 				cmdErr := cmd.Run()
 				executionTime := time.Since(startTime)
@@ -80,7 +114,7 @@ func main() {
 				} else {
 					consecutiveFailures = 1
 				}
-				if consecutiveFailures >= maxConsecutiveFailures {
+				if consecutiveFailures >= max(maxConsecutiveFailures, job.Options.MaxFailures) {
 					cockSay(job.JobName + "程序连续3次启动失败，停止重启")
 					break
 				} else {
@@ -92,7 +126,7 @@ func main() {
 	cockSay(fmt.Sprintf("cock启动成功"))
 
 	wg.Wait()
-	fmt.Println("当前没有任务")
+	fmt.Println("当前没有任务,常驻任务，退出所有程序")
 }
 
 func schedule(jobList []Job) {
