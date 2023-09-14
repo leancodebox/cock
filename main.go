@@ -115,7 +115,6 @@ func schedule(jobList []Job) {
 				if cmdErr != nil {
 					fmt.Println(cmdErr)
 				}
-				fmt.Println("end")
 			}
 		}(job))
 		if err != nil {
