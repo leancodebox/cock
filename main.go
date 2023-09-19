@@ -145,6 +145,19 @@ func schedule(jobList []Job) {
 				cmd.Stdin = os.Stdin
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
+				if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
+					err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
+					if err != nil {
+						fmt.Println(err)
+					}
+					logFile, err := os.OpenFile(job.Options.OutputPath+"/"+job.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+					if err != nil {
+						fmt.Println(err)
+					}
+					defer logFile.Close()
+					cmd.Stdout = logFile
+					cmd.Stderr = logFile
+				}
 				cmdErr := cmd.Run()
 				if cmdErr != nil {
 					fmt.Println(cmdErr)
