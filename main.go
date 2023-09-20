@@ -115,9 +115,11 @@ func main() {
 					consecutiveFailures = 1
 				}
 				if consecutiveFailures >= max(maxConsecutiveFailures, job.Options.MaxFailures) {
+					fmt.Println(job.JobName + "程序连续3次启动失败，停止重启")
 					cockSay(job.JobName + "程序连续3次启动失败，停止重启")
 					break
 				} else {
+					fmt.Println(job.JobName + "程序终止尝试重新运行")
 					cockSay(job.JobName + "程序终止尝试重新运行")
 				}
 			}
