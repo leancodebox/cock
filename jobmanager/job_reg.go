@@ -3,20 +3,36 @@ package jobmanager
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/leancodebox/cock/cockSay"
+	"github.com/robfig/cron/v3"
 	"log/slog"
 	"os"
 	"os/exec"
-	"os/signal"
 	"sync"
 	"time"
 )
 
-type runStatus int
+type RunStatus int
 
 const (
-	Stop runStatus = iota
+	Stop RunStatus = iota
 	Running
 )
+
+var runStatusName = [...]string{
+	"停止",
+	"运行",
+}
+
+func (d RunStatus) String() string {
+	if d < Stop || d > Running {
+		return "Unknown"
+	}
+	return runStatusName[d]
+}
+
+
+
 
 const maxExecutionTime = 10 * time.Second // 最大允许的运行时间
 const maxConsecutiveFailures = 3          // 连续失败次数的最大值
@@ -54,7 +70,7 @@ var jobManager sync.Map
 
 type jobHandle struct {
 	jobConfig Job
-	status    runStatus
+	status    RunStatus
 	confLock  sync.Mutex
 	cmd       *exec.Cmd
 }
@@ -116,8 +132,10 @@ func (itself *jobHandle) jobGuard() {
 
 		if consecutiveFailures >= max(maxConsecutiveFailures, job.Options.MaxFailures) {
 			fmt.Println(job.JobName + "程序连续3次启动失败，停止重启")
+			cockSay.Send(job.JobName + "程序连续3次启动失败，停止重启")
 			break
 		} else {
+			cockSay.Send(job.JobName + "程序终止尝试重新运行")
 			fmt.Println(job.JobName + "程序终止尝试重新运行")
 		}
 	}
@@ -135,27 +153,64 @@ func (itself *jobHandle) StopJob() {
 	}
 }
 
-func reg() {
+func Reg(fileData []byte) {
 
-	fileData, err := os.ReadFile("jobConfig.json")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
 	var jobConfig JobConfig
-	err = json.Unmarshal(fileData, &jobConfig)
+	err := json.Unmarshal(fileData, &jobConfig)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	for id, job := range jobConfig.ResidentTask {
-		jobManager.Store(fmt.Sprintf("%v%v", id, job.JobName), job)
+		jh := jobHandle{jobConfig: job}
+		jobManager.Store(fmt.Sprintf("%v%v", id, jh.jobConfig.JobName), &jh)
+		jh.RunJob()
+		slog.Info(fmt.Sprintf("%v%v加入常驻任务", id, jh.jobConfig.JobName))
 	}
 
-	// 将所有的任务加入map中
+	go schedule(jobConfig.ScheduledTask)
+}
 
-	quit := make(chan os.Signal)
-	signal.Notify(quit, os.Interrupt)
-	<-quit
+func schedule(jobList []Job) {
+	var c = cron.New()
+	for _, job := range jobList {
+		if job.Run == false {
+			continue
+		}
+		if job.Spec == "" {
+			continue
+		}
+		_, err := c.AddFunc(job.Spec, func(job Job) func() {
+			return func() {
+				cmd := exec.Command(job.BinPath, job.Params...)
+				cmd.Dir = job.Dir
+				cmd.Stdin = os.Stdin
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
+					err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
+					if err != nil {
+						fmt.Println(err)
+					}
+					logFile, err := os.OpenFile(job.Options.OutputPath+"/"+job.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+					if err != nil {
+						fmt.Println(err)
+					}
+					defer logFile.Close()
+					cmd.Stdout = logFile
+					cmd.Stderr = logFile
+				}
+				cmdErr := cmd.Run()
+				if cmdErr != nil {
+					fmt.Println(cmdErr)
+				}
+			}
+		}(job))
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(job.JobName + "加入定时任务")
+	}
+	c.Run()
 }

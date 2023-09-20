@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gen2brain/beeep"
-	"github.com/robfig/cron/v3"
+	"github.com/gin-gonic/gin"
+	"github.com/leancodebox/cock/jobmanager"
+	"log"
+	"log/slog"
+	"net/http"
 	"os"
-	"os/exec"
-	"sync"
+	"os/signal"
 	"time"
 )
 
@@ -64,112 +69,51 @@ func main() {
 		return
 	}
 
-	go schedule(jobConfig.ScheduledTask)
+	// 将所有的任务加入map中
+	serveRun()
 
-	wg := sync.WaitGroup{}
-	counter := 0
-	for _, job := range jobConfig.ResidentTask {
-		wg.Add(1)
-		go func(job Job) {
-			defer func() {
-				if p := recover(); p != nil {
-					data, _ := json.Marshal(p)
-					cockSay("任务崩溃" + string(data))
-				}
-			}()
-			defer wg.Done()
-			if job.Run == false {
-				return
-			}
-			fmt.Println(job.JobName + "加入常驻任务")
-			consecutiveFailures := 1
-			cmd := exec.Command(job.BinPath, job.Params...)
-			cmd.Dir = job.Dir
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
-				err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
-				if err != nil {
-					fmt.Println(err)
-				}
-				logFile, err := os.OpenFile(job.Options.OutputPath+"/"+job.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-				if err != nil {
-					fmt.Println(err)
-				}
-				defer logFile.Close()
-				cmd.Stdout = logFile
-				cmd.Stderr = logFile
-			}
-			for {
-				startTime := time.Now()
-				counter += 1
-				cmdErr := cmd.Run()
-				executionTime := time.Since(startTime)
-				if cmdErr != nil {
-					fmt.Println(cmdErr)
-				}
-				if executionTime <= maxExecutionTime {
-					consecutiveFailures += 1
-				} else {
-					consecutiveFailures = 1
-				}
-				if consecutiveFailures >= max(maxConsecutiveFailures, job.Options.MaxFailures) {
-					fmt.Println(job.JobName + "程序连续3次启动失败，停止重启")
-					cockSay(job.JobName + "程序连续3次启动失败，停止重启")
-					break
-				} else {
-					fmt.Println(job.JobName + "程序终止尝试重新运行")
-					cockSay(job.JobName + "程序终止尝试重新运行")
-				}
-			}
-		}(job)
-	}
-	cockSay(fmt.Sprintf("cock启动成功"))
+	jobmanager.Reg(fileData)
+	quit := make(chan os.Signal)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
 
-	wg.Wait()
-	fmt.Println("当前没有任务,常驻任务，退出所有程序")
+	serveStop()
+	slog.Info("bye~~👋👋")
 }
 
-func schedule(jobList []Job) {
-	var c = cron.New()
-	for _, job := range jobList {
-		if job.Run == false {
-			continue
-		}
-		if job.Spec == "" {
-			continue
-		}
-		_, err := c.AddFunc(job.Spec, func(job Job) func() {
-			return func() {
-				cmd := exec.Command(job.BinPath, job.Params...)
-				cmd.Dir = job.Dir
-				cmd.Stdin = os.Stdin
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
-					err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
-					if err != nil {
-						fmt.Println(err)
-					}
-					logFile, err := os.OpenFile(job.Options.OutputPath+"/"+job.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-					if err != nil {
-						fmt.Println(err)
-					}
-					defer logFile.Close()
-					cmd.Stdout = logFile
-					cmd.Stderr = logFile
-				}
-				cmdErr := cmd.Run()
-				if cmdErr != nil {
-					fmt.Println(cmdErr)
-				}
-			}
-		}(job))
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(job.JobName + "加入定时任务")
+var srv *http.Server
+
+func serveRun() *http.Server {
+	r := gin.Default()
+	srv = &http.Server{
+		Addr:           ":9090",
+		Handler:        r,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
-	c.Run()
+
+	r.GET("/job-list", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": jobmanager.JobList(),
+		})
+	})
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	return srv
+}
+func serveStop() {
+	if srv == nil {
+		return
+	}
+	slog.Info("Shutdown Server ...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Info("Server Shutdown:", "err", err.Error())
+	}
 }
