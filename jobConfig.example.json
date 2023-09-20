@@ -1,4 +1,9 @@
 {
+  "config": {
+    "dashboard": {
+      "port": 9090
+    }
+  },
   "residentTask": [
     {
       "jobName": "thh",
