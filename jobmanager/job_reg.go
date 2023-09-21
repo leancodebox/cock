@@ -86,6 +86,8 @@ func (itself *jobHandle) RunJob() {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		itself.cmd = cmd
+	} else {
+		return
 	}
 	go itself.jobGuard()
 }
@@ -96,6 +98,9 @@ func (itself *jobHandle) ForceRunJob() {
 }
 
 func (itself *jobHandle) jobGuard() {
+	defer func() {
+		itself.cmd = nil
+	}()
 	job := itself.jobConfig
 	if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
 		err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
