@@ -100,11 +100,11 @@ func (itself *jobHandle) jobGuard() {
 	if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
 		err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
 		if err != nil {
-			fmt.Println(err)
+			slog.Info(err.Error())
 		}
 		logFile, err := os.OpenFile(job.Options.OutputPath+"/"+job.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
-			fmt.Println(err)
+			slog.Info(err.Error())
 		}
 		defer logFile.Close()
 		itself.cmd.Stdout = logFile
@@ -114,7 +114,7 @@ func (itself *jobHandle) jobGuard() {
 	consecutiveFailures := 1
 	for {
 		if !itself.jobConfig.Run {
-			fmt.Println("no run ")
+			slog.Info("no run ")
 			return
 		}
 		unitStartTime := time.Now()
@@ -128,7 +128,7 @@ func (itself *jobHandle) jobGuard() {
 
 		executionTime := time.Since(unitStartTime)
 		if cmdErr != nil {
-			fmt.Println(cmdErr)
+			slog.Info(cmdErr.Error())
 		}
 		if executionTime <= maxExecutionTime {
 			consecutiveFailures += 1
@@ -137,12 +137,12 @@ func (itself *jobHandle) jobGuard() {
 		}
 
 		if consecutiveFailures >= max(maxConsecutiveFailures, job.Options.MaxFailures) {
-			fmt.Println(job.JobName + "程序连续3次启动失败，停止重启")
+			slog.Info(job.JobName + "程序连续3次启动失败，停止重启")
 			cockSay.Send(job.JobName + "程序连续3次启动失败，停止重启")
 			break
 		} else {
 			cockSay.Send(job.JobName + "程序终止尝试重新运行")
-			fmt.Println(job.JobName + "程序终止尝试重新运行")
+			slog.Info(job.JobName + "程序终止尝试重新运行")
 		}
 	}
 }
@@ -166,7 +166,7 @@ func Reg(fileData []byte) {
 	var jobConfig JobConfig
 	err := json.Unmarshal(fileData, &jobConfig)
 	if err != nil {
-		fmt.Println(err)
+		slog.Info(err.Error())
 		return
 	}
 
@@ -199,11 +199,11 @@ func schedule(jobList []Job) {
 				if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
 					err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
 					if err != nil {
-						fmt.Println(err)
+						slog.Info(err.Error())
 					}
 					logFile, err := os.OpenFile(job.Options.OutputPath+"/"+job.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 					if err != nil {
-						fmt.Println(err)
+						slog.Info(err.Error())
 					}
 					defer logFile.Close()
 					cmd.Stdout = logFile
@@ -211,14 +211,14 @@ func schedule(jobList []Job) {
 				}
 				cmdErr := cmd.Run()
 				if cmdErr != nil {
-					fmt.Println(cmdErr)
+					slog.Info(cmdErr.Error())
 				}
 			}
 		}(job))
 		if err != nil {
-			fmt.Println(err)
+			slog.Info(err.Error())
 		}
-		fmt.Println(job.JobName + "加入定时任务")
+		slog.Info(job.JobName + "加入定时任务")
 	}
 	c.Run()
 }
