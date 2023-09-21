@@ -2,16 +2,18 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"embed"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/leancodebox/cock/jobmanager"
+	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"time"
 )
 
@@ -20,42 +22,9 @@ const maxConsecutiveFailures = 3          // 连续失败次数的最大值
 
 type OutputType int
 
-const (
-	OutputTypeStd  OutputType = iota // 输出到标准输入输出
-	OutputTypeFile                   // 输出到文件
-)
-
-type RunOptions struct {
-	OutputType  OutputType `json:"outputType"`  // 输出方式
-	OutputPath  string     `json:"outputPath"`  // 输出路径
-	MaxFailures int        `json:"maxFailures"` // 最大失败次数
-}
-
-type Job struct {
-	JobName string     `json:"jobName"`
-	BinPath string     `json:"binPath"`
-	Params  []string   `json:"params"`
-	Dir     string     `json:"dir"`
-	Timer   bool       `json:"timer"`
-	Spec    string     `json:"spec"`
-	Run     bool       `json:"run"`
-	Options RunOptions `json:"options"` // 运行选项
-}
-
-type JobConfig struct {
-	ResidentTask  []Job `json:"residentTask"`
-	ScheduledTask []Job `json:"scheduledTask"`
-}
-
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	fileData, err := os.ReadFile("jobConfig.json")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	var jobConfig JobConfig
-	err = json.Unmarshal(fileData, &jobConfig)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -75,8 +44,16 @@ func main() {
 
 var srv *http.Server
 
+//go:embed  all:actor/dist/**
+var actorFS embed.FS
+
 func serveRun() *http.Server {
-	r := gin.Default()
+	//r := gin.Default()
+
+	gin.DisableConsoleColor()
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.Use(gin.Recovery())
 	srv = &http.Server{
 		Addr:           ":9090",
 		Handler:        r,
@@ -85,6 +62,8 @@ func serveRun() *http.Server {
 		MaxHeaderBytes: 1 << 20,
 	}
 	r.Use(GinCors)
+	act := r.Group("actor")
+	act.StaticFS("", PFilSystem("./actor/dist", actorFS))
 	api := r.Group("api")
 	api.GET("/job-list", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -136,6 +115,29 @@ func serveStop() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Info("Server Shutdown:", "err", err.Error())
 	}
+}
+
+type fsFunc func(name string) (fs.File, error)
+
+func (f fsFunc) Open(name string) (fs.File, error) {
+	return f(name)
+}
+
+func upFsHandle(pPath string, fSys fs.FS) fsFunc {
+	return func(name string) (fs.File, error) {
+		assetPath := path.Join(pPath, name)
+		// If we can't find the asset, fs can handle the error
+		file, err := fSys.Open(assetPath)
+		if err != nil {
+			slog.Error(err.Error())
+			return nil, err
+		}
+		return file, err
+	}
+}
+
+func PFilSystem(pPath string, fSys fs.FS) http.FileSystem {
+	return http.FS(upFsHandle(pPath, fSys))
 }
 
 func GinCors(context *gin.Context) {
