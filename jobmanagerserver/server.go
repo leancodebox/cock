@@ -3,6 +3,7 @@ package jobmanagerserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/leancodebox/cock/actor"
 	"github.com/leancodebox/cock/jobmanager"
@@ -17,7 +18,8 @@ import (
 var srv *http.Server
 
 func ServeRun() *http.Server {
-	if jobmanager.GetHttpConfig().Dashboard.Port <= 0 {
+	port := jobmanager.GetHttpConfig().Dashboard.Port
+	if port <= 0 {
 		return nil
 	}
 	slog.Info("cock 开启server服务")
@@ -28,7 +30,7 @@ func ServeRun() *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	srv = &http.Server{
-		Addr:           ":9090",
+		Addr:           fmt.Sprintf(":%v", port),
 		Handler:        r,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
