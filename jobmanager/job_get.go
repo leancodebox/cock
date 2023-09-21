@@ -1,6 +1,9 @@
 package jobmanager
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 type JobStatus struct {
 	Status  RunStatus `json:"status"`
@@ -10,15 +13,16 @@ type JobStatus struct {
 
 func JobList() []JobStatus {
 	var jobNameList []JobStatus
-	jobManager.Range(func(key, value any) bool {
-
-		if data, ok := value.(*jobHandle); ok {
-			if jobId, ok := key.(string); ok {
-				jobNameList = append(jobNameList, JobStatus{Name: jobId, Status: data.status, OpenRun: data.jobConfig.Run})
-			}
+	for _, jobId := range jobIdList.getAll() {
+		data, ok := jobManager.Load(jobId)
+		if !ok {
+			continue
 		}
-		return true
-	})
+		if jh, ok := data.(*jobHandle); ok {
+			jobNameList = append(jobNameList, JobStatus{Name: jobId, Status: jh.status, OpenRun: jh.jobConfig.Run})
+		}
+	}
+
 	return jobNameList
 }
 
@@ -47,4 +51,8 @@ func JobStop(jobId string) error {
 	}
 	jh.StopJob()
 	return nil
+}
+
+func RunStartTime() time.Time {
+	return startTime
 }

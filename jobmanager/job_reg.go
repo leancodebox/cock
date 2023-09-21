@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"slices"
 	"sync"
 	"time"
 )
@@ -66,6 +67,24 @@ type JobConfig struct {
 }
 
 var jobManager sync.Map
+var jobIdList JobListManager
+
+type JobListManager struct {
+	jobIdList []string
+	lock      sync.Mutex
+}
+
+func (itself *JobListManager) append(jobId ...string) {
+	itself.lock.Lock()
+	defer itself.lock.Unlock()
+	itself.jobIdList = append(itself.jobIdList, jobId...)
+}
+
+func (itself *JobListManager) getAll() []string {
+	itself.lock.Lock()
+	defer itself.lock.Unlock()
+	return slices.Clone(itself.jobIdList)
+}
 
 type jobHandle struct {
 	jobConfig Job
@@ -177,7 +196,9 @@ func Reg(fileData []byte) {
 
 	for id, job := range jobConfig.ResidentTask {
 		jh := jobHandle{jobConfig: job}
-		jobManager.Store(fmt.Sprintf("%v%v", id, jh.jobConfig.JobName), &jh)
+		jobId := fmt.Sprintf("%v%v", id, jh.jobConfig.JobName)
+		jobManager.Store(jobId, &jh)
+		jobIdList.append(jobId)
 		jh.RunJob()
 		slog.Info(fmt.Sprintf("%v%v加入常驻任务", id, jh.jobConfig.JobName))
 	}
