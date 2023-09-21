@@ -20,6 +20,10 @@
       "params": [
         "serve"
       ],
+      "options": {
+        "outputType": 1,
+        "outputPath": "./tmp"
+      },
       "dir": "/Users/thh/workspace/atool",
       "run": true
     }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gen2brain/beeep"
 	"github.com/gin-gonic/gin"
 	"github.com/leancodebox/cock/jobmanager"
 	"log"
@@ -48,15 +47,8 @@ type JobConfig struct {
 	ScheduledTask []Job `json:"scheduledTask"`
 }
 
-func cockSay(msg string) {
-	err := beeep.Notify("Cock", msg, "")
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
 func main() {
-
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	fileData, err := os.ReadFile("jobConfig.json")
 	if err != nil {
 		fmt.Println(err)
@@ -92,10 +84,38 @@ func serveRun() *http.Server {
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
-
-	r.GET("/job-list", func(c *gin.Context) {
+	r.Use(GinCors)
+	api := r.Group("api")
+	api.GET("/job-list", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": jobmanager.JobList(),
+		})
+	})
+	type JobUpdateReq struct {
+		JobId string `json:"jobId"`
+	}
+	api.POST("/run-job", func(c *gin.Context) {
+		var params JobUpdateReq
+		_ = c.ShouldBind(&params)
+		err := jobmanager.JobRun(params.JobId)
+		msg := "success"
+		if err != nil {
+			msg = err.Error()
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": msg,
+		})
+	})
+	api.POST("/stop-job", func(c *gin.Context) {
+		var params JobUpdateReq
+		_ = c.ShouldBind(&params)
+		err := jobmanager.JobStop(params.JobId)
+		msg := "success"
+		if err != nil {
+			msg = err.Error()
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": msg,
 		})
 	})
 	go func() {
@@ -116,4 +136,17 @@ func serveStop() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Info("Server Shutdown:", "err", err.Error())
 	}
+}
+
+func GinCors(context *gin.Context) {
+	method := context.Request.Method
+	context.Header("Access-Control-Allow-Origin", "*")
+	context.Header("Access-Control-Allow-Headers", "Content-Type,AccessToken,X-CSRF-Token, Authorization, Token, New-Token")
+	context.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE, PATCH, PUT")
+	context.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type,New-Token")
+	context.Header("Access-Control-Allow-Credentials", "true")
+	if method == "OPTIONS" {
+		context.AbortWithStatus(http.StatusNoContent)
+	}
+	context.Next()
 }

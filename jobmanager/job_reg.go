@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+var startTime = time.Now()
+
 type RunStatus int
 
 const (
@@ -30,9 +32,6 @@ func (d RunStatus) String() string {
 	}
 	return runStatusName[d]
 }
-
-
-
 
 const maxExecutionTime = 10 * time.Second // 最大允许的运行时间
 const maxConsecutiveFailures = 3          // 连续失败次数的最大值
@@ -79,9 +78,6 @@ type jobHandle struct {
 func (itself *jobHandle) RunJob() {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
-	if itself.status == Running {
-		return
-	}
 	if itself.cmd == nil {
 		job := itself.jobConfig
 		cmd := exec.Command(job.BinPath, job.Params...)
@@ -92,6 +88,11 @@ func (itself *jobHandle) RunJob() {
 		itself.cmd = cmd
 	}
 	go itself.jobGuard()
+}
+
+func (itself *jobHandle) ForceRunJob() {
+	itself.jobConfig.Run = true
+	itself.RunJob()
 }
 
 func (itself *jobHandle) jobGuard() {
@@ -112,7 +113,11 @@ func (itself *jobHandle) jobGuard() {
 	counter := 1
 	consecutiveFailures := 1
 	for {
-		startTime := time.Now()
+		if !itself.jobConfig.Run {
+			fmt.Println("no run ")
+			return
+		}
+		unitStartTime := time.Now()
 		counter += 1
 		cmdErr := itself.cmd.Start()
 		if cmdErr == nil {
@@ -120,7 +125,8 @@ func (itself *jobHandle) jobGuard() {
 			cmdErr = itself.cmd.Wait()
 			itself.status = Stop
 		}
-		executionTime := time.Since(startTime)
+
+		executionTime := time.Since(unitStartTime)
 		if cmdErr != nil {
 			fmt.Println(cmdErr)
 		}
@@ -144,12 +150,14 @@ func (itself *jobHandle) jobGuard() {
 func (itself *jobHandle) StopJob() {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
-	if itself.cmd == nil && itself.cmd.Process != nil {
+	itself.jobConfig.Run = false
+	if itself.cmd != nil && itself.cmd.Process != nil {
 		err := itself.cmd.Process.Kill()
 		if err != nil {
 			slog.Info(err.Error())
 			return
 		}
+		itself.cmd = nil
 	}
 }
 
