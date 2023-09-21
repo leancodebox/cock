@@ -56,3 +56,7 @@ func JobStop(jobId string) error {
 func RunStartTime() time.Time {
 	return startTime
 }
+
+func GetHttpConfig() BaseConfig {
+	return jobConfig.Config
+}

@@ -17,6 +17,10 @@ import (
 var srv *http.Server
 
 func ServeRun() *http.Server {
+	if jobmanager.GetHttpConfig().Dashboard.Port <= 0 {
+		return nil
+	}
+	slog.Info("cock 开启server服务")
 	//r := gin.Default()
 
 	gin.DisableConsoleColor()
