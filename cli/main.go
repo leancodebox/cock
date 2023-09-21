@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/leancodebox/cock/jobmanager"
-	"github.com/leancodebox/cock/jobmanagerserver"
 	"github.com/leancodebox/cock/resource"
 	"log/slog"
 	"os"
@@ -47,10 +46,8 @@ func main() {
 	}
 
 	jobmanager.Reg(fileData)
-	jobmanagerserver.ServeRun()
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
-	jobmanagerserver.ServeStop()
 	slog.Info("bye~~👋👋")
 }
