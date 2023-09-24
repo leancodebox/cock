@@ -22,7 +22,7 @@ func ServeRun() *http.Server {
 	if port <= 0 {
 		return nil
 	}
-	slog.Info("cock 开启server服务")
+	slog.Info(fmt.Sprintf("cock 开启server服务 http://localhost:%v/actor", port))
 	//r := gin.Default()
 
 	gin.DisableConsoleColor()
@@ -41,8 +41,10 @@ func ServeRun() *http.Server {
 	act.StaticFS("", PFilSystem("./dist", actor.GetActorFs()))
 	api := r.Group("api")
 	api.GET("/job-list", func(c *gin.Context) {
+		all := jobmanager.JobList()
+		all = append(all, jobmanager.TaskList()...)
 		c.JSON(http.StatusOK, gin.H{
-			"message": jobmanager.JobList(),
+			"message": all,
 		})
 	})
 	type JobUpdateReq struct {
@@ -72,6 +74,24 @@ func ServeRun() *http.Server {
 			"message": msg,
 		})
 	})
+
+	type TaskActionReq struct {
+		TaskId string `json:"taskId"`
+	}
+
+	api.POST("/run-task", func(c *gin.Context) {
+		var params TaskActionReq
+		_ = c.ShouldBind(&params)
+		err := jobmanager.RunTask(params.TaskId)
+		msg := "success"
+		if err != nil {
+			msg = err.Error()
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": msg,
+		})
+	})
+
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %s\n", err)

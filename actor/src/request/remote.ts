@@ -37,3 +37,9 @@ export function stopJob(jobId: any) {
         jobId: jobId
     })
 }
+
+export function runTask(taskId: any) {
+    return instanceAxios.post("run-task", {
+        taskId: taskId
+    })
+}

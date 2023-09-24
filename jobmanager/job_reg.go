@@ -2,6 +2,7 @@ package jobmanager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/leancodebox/cock/cockSay"
 	"github.com/robfig/cron/v3"
@@ -21,7 +22,6 @@ const (
 	Stop RunStatus = iota
 	Running
 )
-
 
 var jobManager sync.Map
 var jobIdList JobListManager
@@ -154,26 +154,90 @@ func Reg(fileData []byte) {
 
 	for id, job := range jobConfig.ResidentTask {
 		jh := jobHandle{jobConfig: job}
-		jobId := fmt.Sprintf("%v%v", id, jh.jobConfig.JobName)
+		jobId := fmt.Sprintf("job-%v%v", id, jh.jobConfig.JobName)
 		jobManager.Store(jobId, &jh)
 		jobIdList.append(jobId)
 		jh.RunJob()
-		slog.Info(fmt.Sprintf("%v%v加入常驻任务", id, jh.jobConfig.JobName))
+		slog.Info(fmt.Sprintf("%v 加入常驻任务", jobId))
 	}
 
 	go schedule(jobConfig.ScheduledTask)
 }
 
+var c = cron.New()
+
+var taskManager sync.Map
+var taskIdList JobListManager
+
+type taskHandle struct {
+	jobConfig   Job
+	status      RunStatus
+	entityId    cron.EntryID
+	runOnceLock sync.Mutex
+}
+
+func (itself *taskHandle) RunOnce() error {
+	if itself.runOnceLock.TryLock() {
+		go func(job Job) {
+			defer itself.runOnceLock.Unlock()
+			cmd := exec.Command(job.BinPath, job.Params...)
+			cmd.Dir = job.Dir
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if job.Options.OutputType == OutputTypeFile && job.Options.OutputPath != "" {
+				err := os.MkdirAll(job.Options.OutputPath, os.ModePerm)
+				if err != nil {
+					slog.Info(err.Error())
+				}
+				logFile, err := os.OpenFile(job.Options.OutputPath+"/"+job.JobName+"_log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+				if err != nil {
+					slog.Info(err.Error())
+				}
+				defer logFile.Close()
+				cmd.Stdout = logFile
+				cmd.Stderr = logFile
+			}
+			cmdErr := cmd.Run()
+			if cmdErr != nil {
+				slog.Info(cmdErr.Error())
+			}
+		}(itself.jobConfig)
+		return nil
+	} else {
+		return errors.New("上次手动运行尚未结束")
+	}
+	return nil
+}
+
 func schedule(jobList []Job) {
-	var c = cron.New()
-	for _, job := range jobList {
-		if job.Run == false {
-			continue
-		}
+
+	for id, job := range jobList {
+
 		if job.Spec == "" {
+			slog.Warn("Spec is blank")
+			//continue
+		}
+		// 初始化并记录所有的配置
+		th := taskHandle{jobConfig: job}
+		taskId := fmt.Sprintf("%v-%v-%v", `task`, id, job.JobName)
+		taskIdList.append(taskId)
+		taskManager.Store(taskId, &th)
+	}
+
+	for _, taskId := range taskIdList.getAll() {
+		data, ok := taskManager.Load(taskId)
+		if ok == false {
 			continue
 		}
-		_, err := c.AddFunc(job.Spec, func(job Job) func() {
+		th, ok := data.(*taskHandle)
+		if ok == false {
+			continue
+		}
+		if th.jobConfig.Run == false {
+			continue
+		}
+		entityId, err := c.AddFunc(th.jobConfig.Spec, func(job Job) func() {
 			return func() {
 				cmd := exec.Command(job.BinPath, job.Params...)
 				cmd.Dir = job.Dir
@@ -198,11 +262,15 @@ func schedule(jobList []Job) {
 					slog.Info(cmdErr.Error())
 				}
 			}
-		}(job))
+		}(th.jobConfig))
 		if err != nil {
-			slog.Info(err.Error())
+			slog.Error(err.Error())
+		} else {
+			th.entityId = entityId
+			th.status = Running
+			slog.Info(fmt.Sprintf("%v 加入任务", taskId))
 		}
-		slog.Info(job.JobName + "加入定时任务")
 	}
+
 	c.Run()
 }

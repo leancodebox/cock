@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import {NButton, NDataTable, NSpace} from "naive-ui"
+import {NButton, NDataTable, NSpace, useMessage} from "naive-ui"
 import {h, onMounted, ref} from "vue";
-import {getJobList, runJob, stopJob} from "@/request/remote"
+import {getJobList, runJob, runTask, stopJob} from "@/request/remote"
 
+const message = useMessage()
 const columns = [
   {title: 'jobId', key: 'name', ellipsis: true},
+  {
+    title: 'type', key: 'type', ellipsis: true, render(row: any) {
+      return row.type === 1 ? "常驻" : "定时"
+    }
+  },
   {
     title: 'run', key: 'openRun', ellipsis: true, render(row: any) {
       return row.openRun === 1 ? "关闭" : "开启"
@@ -17,7 +23,7 @@ const columns = [
   },
   {
     title: 'opt', key: 'opt', ellipsis: true, render(row: any) {
-      let content = [h(
+      let jobButton = [h(
           NButton,
           {
             strong: true,
@@ -38,9 +44,31 @@ const columns = [
           },
           {default: () => "run"}
       )]
-      return h(NSpace,
-          {},
-          {default: () => content})
+      let taskButton = [
+        h(NButton,
+            {
+              strong: true,
+              tertiary: true,
+              type: "primary",
+              size: "small",
+              onClick: () => runTask(row.name).then(r => {
+                message.success(r.data.message)
+                return getData()
+              })
+            },
+            {default: () => "运行一次"}
+        )
+      ]
+      if (row.type === 1) {
+        return h(NSpace,
+            {},
+            {default: () => jobButton})
+      } else {
+
+        return h(NSpace,
+            {},
+            {default: () => taskButton})
+      }
     }
   }
 ]
@@ -53,7 +81,6 @@ onMounted(() => {
 async function getData() {
   let resp = await getJobList()
   data.value = resp.data.message
-  console.log(resp.data.message)
 }
 </script>
 <template>
