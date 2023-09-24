@@ -17,7 +17,7 @@ const columns = [
   },
   {
     title: 'opt', key: 'opt', ellipsis: true, render(row: any) {
-      return [h(
+      let content = [h(
           NButton,
           {
             strong: true,
@@ -37,8 +37,10 @@ const columns = [
             onClick: () => runJob(row.name).then(r => getData())
           },
           {default: () => "run"}
-      )
-      ]
+      )]
+      return h(NSpace,
+          {},
+          {default: () => content})
     }
   }
 ]
