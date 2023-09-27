@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {NButton, NDataTable, NSpace, useMessage} from "naive-ui"
+import {NButton, NDataTable, NSpace, NTag, useMessage} from "naive-ui"
 import {h, onMounted, ref} from "vue";
 import {getJobList, runJob, runTask, stopJob} from "@/request/remote"
 
@@ -13,12 +13,20 @@ const columns = [
   },
   {
     title: 'run', key: 'openRun', ellipsis: true, render(row: any) {
-      return row.openRun === 1 ? "关闭" : "开启"
+      return h(NTag, {
+        bordered: false,
+        type: row.openRun ? "info" : "default",
+      }, {default: () => row.openRun ? "开启" : "关闭"})
     }
   },
   {
     title: 'status', key: 'status', ellipsis: true, render(row: any) {
-      return row.status === 1 ? "运行" : "暂停"
+      return h(NTag, {
+            bordered: false,
+            type: row.status === 1 ? "success" : "warning"
+          },
+          {default: () => row.status === 1 ? "运行" : "暂停"}
+      )
     }
   },
   {
