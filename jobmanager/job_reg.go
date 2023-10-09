@@ -117,7 +117,7 @@ func (itself *jobHandle) jobGuard() {
 			consecutiveFailures = 1
 		}
 
-		if itself.jobConfig.Run {
+		if !itself.jobConfig.Run {
 			msg := "溜了溜了"
 			slog.Info(msg)
 			cockSay.Send(msg)
