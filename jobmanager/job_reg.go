@@ -117,13 +117,22 @@ func (itself *jobHandle) jobGuard() {
 			consecutiveFailures = 1
 		}
 
+		if itself.jobConfig.Run {
+			msg := "溜了溜了"
+			slog.Info(msg)
+			cockSay.Send(msg)
+			break
+		}
+
 		if consecutiveFailures >= max(maxConsecutiveFailures, job.Options.MaxFailures) {
-			slog.Info(job.JobName + "程序连续3次启动失败，停止重启")
-			cockSay.Send(job.JobName + "程序连续3次启动失败，停止重启")
+			msg := job.JobName + "程序连续3次启动失败，停止重启"
+			slog.Info(msg)
+			cockSay.Send(msg)
 			break
 		} else {
-			cockSay.Send(job.JobName + "程序终止尝试重新运行")
-			slog.Info(job.JobName + "程序终止尝试重新运行")
+			msg := job.JobName + "程序终止尝试重新运行"
+			cockSay.Send(msg)
+			slog.Info(msg)
 		}
 	}
 }
@@ -131,6 +140,7 @@ func (itself *jobHandle) jobGuard() {
 func (itself *jobHandle) StopJob() {
 	itself.confLock.Lock()
 	defer itself.confLock.Unlock()
+
 	itself.jobConfig.Run = false
 	if itself.cmd != nil && itself.cmd.Process != nil {
 		err := itself.cmd.Process.Kill()
