@@ -110,6 +110,7 @@ func ServeStop() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Info("Server Shutdown:", "err", err.Error())
 	}
+	jobmanager.StopAll()
 }
 
 type fsFunc func(name string) (fs.File, error)

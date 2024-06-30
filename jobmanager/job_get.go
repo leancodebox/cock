@@ -54,6 +54,15 @@ func JobStop(jobId string) error {
 	return nil
 }
 
+func StopAll() {
+	jobManager.Range(func(key, value any) bool {
+		if jh, ok := value.(*jobHandle); ok {
+			jh.StopJob()
+		}
+		return true
+	})
+}
+
 func RunStartTime() time.Time {
 	return startTime
 }
