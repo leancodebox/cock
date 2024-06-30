@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/leancodebox/cock/cockSay"
+	"github.com/leancodebox/cock/resource"
 	"github.com/robfig/cron/v3"
 	"log/slog"
 	"os"
 	"os/exec"
+	"path"
 	"slices"
 	"sync"
 	"time"
@@ -153,6 +155,36 @@ func (itself *jobHandle) StopJob() {
 }
 
 var jobConfig JobConfig
+
+func RegByUserConfig() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println("获取家目录失败:", err)
+		return err
+	}
+	fmt.Println("当前系统的家目录:", homeDir)
+	configDir := path.Join(homeDir, ".cockTaskConfig")
+	if _, err = os.Stat(configDir); os.IsNotExist(err) {
+		err = os.Mkdir(configDir, os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
+	jobConfigPath := path.Join(configDir, "jobConfig.json")
+	if _, err = os.Stat(jobConfigPath); os.IsNotExist(err) {
+		err = os.WriteFile(jobConfigPath, resource.GetJobConfigDefault(), 0644)
+		if err != nil {
+			fmt.Println("无法写入文件，错误：", err)
+			return err
+		}
+	}
+	fileData, err := os.ReadFile(jobConfigPath)
+	if err != nil {
+		return err
+	}
+	Reg(fileData)
+	return nil
+}
 
 func Reg(fileData []byte) {
 

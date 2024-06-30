@@ -46,6 +46,11 @@ func main() {
 		return
 	}
 
+	//err = jobmanager.RegByUserConfig()
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
 	jobmanager.Reg(fileData)
 	jobmanagerserver.ServeRun()
 	quit := make(chan os.Signal)
