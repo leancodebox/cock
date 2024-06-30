@@ -13,6 +13,7 @@ import (
 	"path"
 	"slices"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -59,6 +60,7 @@ func (itself *jobHandle) RunJob() {
 	if itself.cmd == nil {
 		job := itself.jobConfig
 		cmd := exec.Command(job.BinPath, job.Params...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		cmd.Dir = job.Dir
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
