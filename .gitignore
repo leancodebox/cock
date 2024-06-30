@@ -23,5 +23,5 @@ go.work
 .idea
 jobConfig.json
 tmp
-#dist
+/dist/
 .DS_Store
